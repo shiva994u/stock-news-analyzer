@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#3b82f6" />
+    <meta name="description" content="Stock News Analyzer - Real-time financial news analysis and sentiment tracking with AI-powered insights" />
+    <meta name="keywords" content="stock analysis, financial news, sentiment analysis, market data, investment research" />
+    <meta name="author" content="shiva994u" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://shiva994u.github.io/stock-news-analyzer/" />
+    <meta property="og:title" content="Stock News Analyzer" />
+    <meta property="og:description" content="Real-time financial news analysis and sentiment tracking" />
+    <meta property="og:image" content="%PUBLIC_URL%/og-image.png" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://shiva994u.github.io/stock-news-analyzer/" />
+    <meta property="twitter:title" content="Stock News Analyzer" />
+    <meta property="twitter:description" content="Real-time financial news analysis and sentiment tracking" />
+    <meta property="twitter:image" content="%PUBLIC_URL%/og-image.png" />
+
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    
+    <!-- Preconnect to external APIs for better performance -->
+    <link rel="preconnect" href="https://www.marketaux.com" />
+    <link rel="preconnect" href="https://finnhub.io" />
+    <link rel="preconnect" href="https://stocknewsapi.com" />
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: {
+                50: '#eff6ff',
+                500: '#3b82f6',
+                600: '#2563eb',
+                700: '#1d4ed8'
+              }
+            }
+          }
+        }
+      }
+    </script>
+    
+    <title>Stock News Analyzer</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    
+    <!-- Performance monitoring -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('%PUBLIC_URL%/sw.js')
+            .then((registration) => {
+              console.log('SW registered: ', registration);
+            })
+            .catch((registrationError) => {
+              console.log('SW registration failed: ', registrationError);
+            });
+        });
+      }
+    </script>
+  </body>
+</html>
