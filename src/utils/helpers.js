@@ -328,4 +328,112 @@ export const rateLimiter = {
     const requests = rateLimiter.limits.get(apiName);
     const validRequests = requests.filter(timestamp => timestamp > windowStart);
     
-    return Math.
+  getRemainingRequests: (apiName, maxRequests = 100, windowMs = 24 * 60 * 60 * 1000) => {
+    const now = Date.now();
+    const windowStart = now - windowMs;
+    
+    if (!rateLimiter.limits.has(apiName)) {
+      return maxRequests;
+    }
+    
+    const requests = rateLimiter.limits.get(apiName);
+    const validRequests = requests.filter(timestamp => timestamp > windowStart);
+    
+    return Math.max(0, maxRequests - validRequests.length);
+  }
+};
+
+// Constants for the application
+export const CONSTANTS = {
+  API_ENDPOINTS: {
+    MARKETAUX: 'https://www.marketaux.com/api/v1',
+    FINNHUB: 'https://finnhub.io/api/v1',
+    STOCKNEWS: 'https://stocknewsapi.com/api/v1',
+    ALPHAVANTAGE: 'https://www.alphavantage.co/query'
+  },
+  
+  DEFAULT_SYMBOLS: [
+    'AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA', 'META', 'NVDA', 'JPM', 'V', 'WMT'
+  ],
+  
+  TIME_RANGES: [
+    { value: '1d', label: 'Last 24 Hours' },
+    { value: '3d', label: 'Last 3 Days' },
+    { value: '7d', label: 'Last Week' },
+    { value: '14d', label: 'Last 2 Weeks' },
+    { value: '30d', label: 'Last Month' }
+  ],
+  
+  REPORT_TYPES: [
+    { value: 'comprehensive', label: 'Comprehensive' },
+    { value: 'sentiment', label: 'Sentiment Only' },
+    { value: 'earnings', label: 'Earnings Focus' },
+    { value: 'analyst', label: 'Analyst Reports' }
+  ],
+  
+  SENTIMENT_THRESHOLDS: {
+    POSITIVE: 0.2,
+    NEGATIVE: -0.2
+  },
+  
+  CACHE_DURATION: 5 * 60 * 1000, // 5 minutes
+  MAX_CACHE_SIZE: 50
+};
+
+// Cache management
+export const cache = {
+  store: new Map(),
+  
+  get: (key) => {
+    const item = cache.store.get(key);
+    if (!item) return null;
+    
+    const now = Date.now();
+    if (now - item.timestamp > CONSTANTS.CACHE_DURATION) {
+      cache.store.delete(key);
+      return null;
+    }
+    
+    return item.data;
+  },
+  
+  set: (key, data) => {
+    // Limit cache size
+    if (cache.store.size >= CONSTANTS.MAX_CACHE_SIZE) {
+      const firstKey = cache.store.keys().next().value;
+      cache.store.delete(firstKey);
+    }
+    
+    cache.store.set(key, {
+      data,
+      timestamp: Date.now()
+    });
+  },
+  
+  clear: () => {
+    cache.store.clear();
+  }
+};
+
+export default {
+  formatDate,
+  getSentimentColor,
+  getSentimentIcon,
+  getCategoryColor,
+  exportToCSV,
+  getSentimentLabel,
+  validateStockSymbol,
+  debounce,
+  calculatePercentageChange,
+  formatNumber,
+  getTimeGreeting,
+  isMarketOpen,
+  generateId,
+  truncateText,
+  parseApiError,
+  storage,
+  theme,
+  rateLimiter,
+  cache,
+  CONSTANTS
+};
