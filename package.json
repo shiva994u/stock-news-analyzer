@@ -1,0 +1,81 @@
+{
+  "name": "stock-news-analyzer",
+  "version": "1.0.0",
+  "description": "A comprehensive React-based web application for real-time stock news analysis and sentiment tracking",
+  "main": "src/index.js",
+  "homepage": "https://shiva994u.github.io/stock-news-analyzer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shiva994u/stock-news-analyzer.git"
+  },
+  "keywords": [
+    "stock",
+    "news",
+    "sentiment-analysis",
+    "react",
+    "financial-data",
+    "api",
+    "dashboard",
+    "marketaux",
+    "finnhub",
+    "free-apis"
+  ],
+  "author": "shiva994u",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/shiva994u/stock-news-analyzer/issues"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1",
+    "lucide-react": "^0.263.1",
+    "web-vitals": "^3.5.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.1.0",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^14.5.0",
+    "eslint": "^8.50.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-react": "^7.33.0",
+    "prettier": "^3.0.0",
+    "gh-pages": "^6.0.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "lint": "eslint src/**/*.{js,jsx}",
+    "lint:fix": "eslint src/**/*.{js,jsx} --fix",
+    "format": "prettier --write src/**/*.{js,jsx,css,md}",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build",
+    "analyze": "npm run build && npx source-map-explorer 'build/static/js/*.js'"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest",
+      "prettier"
+    ],
+    "rules": {
+      "no-console": "warn",
+      "no-unused-vars": "warn",
+      "react/prop-types": "warn"
+    }
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
