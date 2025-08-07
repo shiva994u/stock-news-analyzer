@@ -2,7 +2,7 @@
 // src/App.js - MAIN APPLICATION COMPONENT
 // ==========================================
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, TrendingUp, FileText, Download, RefreshCw, Calendar, ExternalLink, AlertCircle, CheckCircle, Clock, Star, BarChart3, Users, Globe, Zap } from 'lucide-react';
 import { EnhancedNewsService } from './services/newsApi';
 import { exportToCSV, formatDate, getSentimentColor, getSentimentIcon, getCategoryColor } from './utils/helpers';
@@ -16,7 +16,7 @@ const StockNewsApp = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [reportType, setReportType] = useState('comprehensive');
-  const [timeRange, setTimeRange] = useState('7d');
+  const [timeRange, setTimeRange] = useState('1d');
   const [sentiment, setSentiment] = useState(null);
   const [apiSources, setApiSources] = useState([]);
 
@@ -26,64 +26,59 @@ const StockNewsApp = () => {
     'UNH', 'PG', 'JNJ', 'HD', 'CVX', 'MA', 'PFE', 'BAC', 'KO', 'PEP'
   ];
 
-  // Initialize news service
-  const newsService = new EnhancedNewsService();
+  // Initialize news service only once
+  const newsServiceRef = useRef(null);
+  if (!newsServiceRef.current) {
+    newsServiceRef.current = new EnhancedNewsService();
+  }
 
   // Enhanced fetch function with multiple APIs
   const fetchStockNews = useCallback(async (symbol, days = 7) => {
     setLoading(true);
     setError(null);
     setApiSources([]);
-    
     try {
       console.log(`Fetching news for ${symbol}...`);
-      
-      const result = await newsService.getComprehensiveNews(symbol, {
+      const result = await newsServiceRef.current.getComprehensiveNews(symbol, {
         limit: 20,
         days: parseInt(days),
         preferredSources: ['marketaux', 'finnhub', 'stocknewsapi', 'alphavantage']
       });
-
       console.log('Fetch result:', result);
-
       // Update state with results
       setNewsData(result.articles || []);
       setSentiment(result.sentiment);
       setApiSources(result.sources || []);
-      
       // Show success message
       const successfulSources = result.sources?.filter(s => s.status === 'success') || [];
       if (successfulSources.length > 0) {
         console.log(`✅ Successfully fetched from ${successfulSources.length} source(s):`, 
           successfulSources.map(s => s.name).join(', '));
       }
-
       // Show warnings if some APIs failed
       if (result.errors && result.errors.length > 0) {
         const errorMsg = `Note: Using ${successfulSources.length} of ${result.sources.length} data sources. Some APIs may need configuration.`;
         setError(errorMsg);
         console.warn('⚠️ Some APIs failed:', result.errors);
       }
-      
       // Add to stocks list if not exists
       if (!stocks.includes(symbol)) {
         setStocks(prev => [...prev, symbol].slice(0, 20)); // Keep last 20
       }
-      
     } catch (err) {
       console.error('❌ Fetch error:', err);
       setError(`Failed to fetch news for ${symbol}: ${err.message}`);
-      
       // Show fallback message
       console.log('📝 Using demo data - configure API keys for real data');
     } finally {
       setLoading(false);
     }
-  }, [stocks, newsService]);
+  }, [stocks]);
 
   // Fetch news when component mounts or dependencies change
   useEffect(() => {
     if (selectedStock) {
+      debugger
       const days = parseInt(timeRange.replace('d', ''));
       fetchStockNews(selectedStock, days);
     }

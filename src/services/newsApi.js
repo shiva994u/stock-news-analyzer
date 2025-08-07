@@ -42,7 +42,7 @@ export class EnhancedNewsService {
 
   // Marketaux API - Best for sentiment analysis
   async fetchFromMarketaux(symbol, options = {}) {
-    const { limit = 20, language = 'en' } = options;
+    const { limit = 1, language = 'en' } = options;
     
     if (!this.apis.marketaux.key || this.apis.marketaux.key === 'your_marketaux_api_key_here') {
       throw new Error('Marketaux API key not configured');
@@ -95,7 +95,7 @@ export class EnhancedNewsService {
 
   // Finnhub API - Best for real-time data
   async fetchFromFinnhub(symbol, options = {}) {
-    const { days = 7 } = options;
+    const { days = 1 } = options;
     
     if (!this.apis.finnhub.key || this.apis.finnhub.key === 'your_finnhub_api_key_here') {
       throw new Error('Finnhub API key not configured');

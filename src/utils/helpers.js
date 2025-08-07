@@ -1,7 +1,3 @@
-// ==========================================
-// src/utils/helpers.js - UTILITY FUNCTIONS
-// ==========================================
-
 import { TrendingUp, AlertCircle, Clock } from 'lucide-react';
 
 // Format date for display
@@ -327,18 +323,6 @@ export const rateLimiter = {
     
     const requests = rateLimiter.limits.get(apiName);
     const validRequests = requests.filter(timestamp => timestamp > windowStart);
-    
-  getRemainingRequests: (apiName, maxRequests = 100, windowMs = 24 * 60 * 60 * 1000) => {
-    const now = Date.now();
-    const windowStart = now - windowMs;
-    
-    if (!rateLimiter.limits.has(apiName)) {
-      return maxRequests;
-    }
-    
-    const requests = rateLimiter.limits.get(apiName);
-    const validRequests = requests.filter(timestamp => timestamp > windowStart);
-    
     return Math.max(0, maxRequests - validRequests.length);
   }
 };
