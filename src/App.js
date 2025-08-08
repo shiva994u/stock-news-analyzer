@@ -1,30 +1,28 @@
 // ==========================================
-// src/App.js - MAIN APPLICATION COMPONENT
+// src/App.js - COMPLETE ENHANCED APPLICATION COMPONENT
 // ==========================================
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, TrendingUp, FileText, Download, RefreshCw, Calendar, ExternalLink, AlertCircle, CheckCircle, Clock, Star, BarChart3, Users, Globe, Zap } from 'lucide-react';
+import { Search, TrendingUp, FileText, Download, RefreshCw, Calendar, ExternalLink, AlertCircle, CheckCircle, Clock, Star, BarChart3, Users, Globe, Zap, ArrowUp, ArrowDown, Activity } from 'lucide-react';
 import { EnhancedNewsService } from './services/newsApi';
+import { realTimeGainersService } from './services/realTimeGainersApi';
 import { exportToCSV, formatDate, getSentimentColor, getSentimentIcon, getCategoryColor } from './utils/helpers';
 import './App.css';
 
 const StockNewsApp = () => {
   // State management
   const [stocks, setStocks] = useState([]);
-  const [selectedStock, setSelectedStock] = useState('AAPL');
+  const [topGainers, setTopGainers] = useState([]);
+  const [selectedStock, setSelectedStock] = useState('');
   const [newsData, setNewsData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingGainers, setLoadingGainers] = useState(false);
   const [error, setError] = useState(null);
   const [reportType, setReportType] = useState('comprehensive');
   const [timeRange, setTimeRange] = useState('1d');
   const [sentiment, setSentiment] = useState(null);
   const [apiSources, setApiSources] = useState([]);
-
-  // Popular stocks for quick selection
-  const popularStocks = [
-    'AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA', 'META', 'NVDA', 'JPM', 'V', 'WMT',
-    'UNH', 'PG', 'JNJ', 'HD', 'CVX', 'MA', 'PFE', 'BAC', 'KO', 'PEP'
-  ];
+  const [stockSentiments, setStockSentiments] = useState(new Map());
 
   // Initialize news service only once
   const newsServiceRef = useRef(null);
@@ -32,65 +30,177 @@ const StockNewsApp = () => {
     newsServiceRef.current = new EnhancedNewsService();
   }
 
-  // Enhanced fetch function with multiple APIs
+  // Fetch REAL-TIME market gainers (no static data)
+  const fetchYahooGainers = useCallback(async () => {
+    // Prevent duplicate calls
+    if (loadingGainers) {
+      console.log('⏳ Real-time gainers fetch already in progress, skipping...');
+      return;
+    }
+
+    setLoadingGainers(true);
+    setError(null);
+    
+    try {
+      console.log('🔄 Fetching REAL-TIME market gainers (no static data)...');
+      
+      // Use the real-time service that fetches actual current gainers
+      const gainers = await realTimeGainersService.getTopGainers({
+        limit: 15,
+        minPercentChange: 1.0
+      });
+      
+      if (gainers && gainers.length > 0) {
+        setTopGainers(gainers);
+        console.log(`✅ Fetched ${gainers.length} REAL-TIME gainers successfully`);
+        
+        // Determine data source for user feedback
+        const isRealTimeData = gainers.some(g => g.source && g.source.includes('realtime'));
+        if (isRealTimeData) {
+          setError(null); // Clear any previous errors
+          console.log('📊 Using live real-time market data');
+        } else {
+          setError('Real-time APIs temporarily unavailable. Please try refreshing.');
+          console.log('⚠️ Real-time APIs failed');
+        }
+        
+        // Auto-analyze sentiment for real-time gainers
+        try {
+          const sentimentResults = await realTimeGainersService.analyzeBulkSentiment(gainers);
+          setStockSentiments(sentimentResults);
+          console.log(`✅ Analyzed sentiment for ${sentimentResults.size} real-time stocks`);
+        } catch (sentimentError) {
+          console.warn('⚠️ Real-time sentiment analysis failed:', sentimentError);
+          // Continue without sentiment data
+        }
+      } else {
+        throw new Error('No real-time gainers data received');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error fetching real-time gainers:', error);
+      setError(`Unable to fetch real-time market data: ${error.message}. Please check your internet connection and try again.`);
+      
+      // Clear existing data since we don't want static fallback
+      setTopGainers([]);
+      setStockSentiments(new Map());
+      console.log('🚫 No static fallback - real-time data only');
+    } finally {
+      setLoadingGainers(false);
+    }
+  }, [loadingGainers]);
+
+  // Enhanced fetch function with duplicate prevention and better error handling
   const fetchStockNews = useCallback(async (symbol, days = 7) => {
+    // Prevent duplicate calls for the same symbol
+    if (loading && selectedStock === symbol) {
+      console.log(`⏳ News fetch for ${symbol} already in progress, skipping...`);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setApiSources([]);
+    setSelectedStock(symbol);
+    
     try {
-      console.log(`Fetching news for ${symbol}...`);
+      console.log(`🔄 Fetching news for ${symbol}...`);
+      
       const result = await newsServiceRef.current.getComprehensiveNews(symbol, {
         limit: 20,
         days: parseInt(days),
         preferredSources: ['marketaux', 'finnhub', 'stocknewsapi', 'alphavantage']
       });
-      console.log('Fetch result:', result);
+      
+      console.log('📊 Fetch result:', result);
+      
       // Update state with results
       setNewsData(result.articles || []);
       setSentiment(result.sentiment);
       setApiSources(result.sources || []);
+      
       // Show success message
       const successfulSources = result.sources?.filter(s => s.status === 'success') || [];
       if (successfulSources.length > 0) {
         console.log(`✅ Successfully fetched from ${successfulSources.length} source(s):`, 
           successfulSources.map(s => s.name).join(', '));
+      } else {
+        setError('Using demo news data. Configure API keys in .env file for real-time news.');
       }
+      
       // Show warnings if some APIs failed
       if (result.errors && result.errors.length > 0) {
-        const errorMsg = `Note: Using ${successfulSources.length} of ${result.sources.length} data sources. Some APIs may need configuration.`;
-        setError(errorMsg);
+        const errorMsg = `Note: Using ${successfulSources.length} of ${result.sources.length} data sources.`;
+        if (successfulSources.length === 0) {
+          setError('Demo news data loaded. Add API keys for live news feeds.');
+        } else {
+          setError(errorMsg);
+        }
         console.warn('⚠️ Some APIs failed:', result.errors);
       }
-      // Add to stocks list if not exists
+      
+      // Add to stocks list if not exists (prevent duplicates)
       if (!stocks.includes(symbol)) {
-        setStocks(prev => [...prev, symbol].slice(0, 20)); // Keep last 20
+        setStocks(prev => {
+          const newStocks = [...prev, symbol];
+          return newStocks.slice(-20); // Keep last 20
+        });
       }
+      
     } catch (err) {
-      console.error('❌ Fetch error:', err);
-      setError(`Failed to fetch news for ${symbol}: ${err.message}`);
-      // Show fallback message
-      console.log('📝 Using demo data - configure API keys for real data');
+      console.error('❌ News fetch error:', err);
+      setError(`Unable to fetch news for ${symbol}. Showing demo articles.`);
+      
+      // Don't clear existing data on error, just show error message
+      if (newsData.length === 0) {
+        console.log('📝 Loading demo news data...');
+      }
     } finally {
       setLoading(false);
     }
-  }, [stocks]);
+  }, [loading, selectedStock, stocks, newsData.length]);
 
-  // Fetch news when component mounts or dependencies change
+  // Fetch gainers when component mounts (only once)
   useEffect(() => {
-    if (selectedStock) {
-      debugger
-      const days = parseInt(timeRange.replace('d', ''));
-      fetchStockNews(selectedStock, days);
+    // Only fetch if we don't have data and not currently loading
+    if (topGainers.length === 0 && !loadingGainers) {
+      fetchYahooGainers();
     }
-  }, [selectedStock, timeRange, fetchStockNews]);
+  }, []); // Empty dependency array - only run once on mount
 
-  // Handle stock search
-  const handleStockSearch = (symbol) => {
-    if (symbol && symbol.trim()) {
-      const cleanSymbol = symbol.toUpperCase().trim();
-      setSelectedStock(cleanSymbol);
+  // Handle stock selection with duplicate prevention
+  const handleStockSelection = useCallback((symbol) => {
+    if (!symbol || !symbol.trim()) return;
+    
+    const cleanSymbol = symbol.toUpperCase().trim();
+    
+    // Prevent duplicate selection
+    if (selectedStock === cleanSymbol && !loading) {
+      console.log(`📌 ${cleanSymbol} already selected`);
+      return;
     }
-  };
+    
+    const days = parseInt(timeRange.replace('d', ''));
+    fetchStockNews(cleanSymbol, days);
+  }, [selectedStock, loading, timeRange, fetchStockNews]);
+
+  // Handle manual search with validation
+  const handleStockSearch = useCallback((symbol) => {
+    if (!symbol || !symbol.trim()) {
+      setError('Please enter a valid stock symbol');
+      return;
+    }
+    
+    const cleanSymbol = symbol.toUpperCase().trim();
+    
+    // Basic validation
+    if (!/^[A-Z]{1,5}$/.test(cleanSymbol)) {
+      setError('Stock symbol should be 1-5 letters only');
+      return;
+    }
+    
+    handleStockSelection(cleanSymbol);
+  }, [handleStockSelection]);
 
   // Handle CSV export
   const handleExport = () => {
@@ -129,14 +239,14 @@ const StockNewsApp = () => {
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                   Stock News Analyzer
                 </h1>
-                <p className="text-gray-600">Real-time financial news and sentiment analysis</p>
+                <p className="text-gray-600">Real-time financial news and sentiment tracking</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="text-sm text-gray-600">
                 <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${loading ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
-                  {loading ? 'Fetching Data...' : 'Ready'}
+                  <div className={`w-3 h-3 rounded-full ${loading ? 'bg-yellow-500' : loadingGainers ? 'bg-blue-500' : 'bg-green-500'}`}></div>
+                  {loading ? 'Fetching News...' : loadingGainers ? 'Loading Gainers...' : 'Ready'}
                 </div>
               </div>
               {/* API Status Indicator */}
@@ -152,25 +262,200 @@ const StockNewsApp = () => {
       </header>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Debug Panel - Remove in production */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="bg-gray-100 rounded-xl p-4 mb-8 text-xs">
+            <h4 className="font-semibold text-gray-700 mb-2">🔧 Debug Info</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <strong>Loading States:</strong><br/>
+                Gainers: {loadingGainers ? '⏳' : '✅'}<br/>
+                News: {loading ? '⏳' : '✅'}
+              </div>
+              <div>
+                <strong>Data Status:</strong><br/>
+                Gainers: {topGainers.length}<br/>
+                News: {newsData.length}
+              </div>
+              <div>
+                <strong>Selected:</strong><br/>
+                Stock: {selectedStock || 'None'}<br/>
+                Range: {timeRange}
+              </div>
+              <div>
+                <strong>Real-Time Service:</strong><br/>
+                Source: {topGainers.length > 0 && topGainers[0].source?.includes('realtime') ? '🔴 Live' : '❌ Failed'}<br/>
+                Cache: <button 
+                  onClick={() => {
+                    realTimeGainersService.clearCache();
+                    console.log('Real-time service cache cleared');
+                  }}
+                  className="text-blue-600 underline"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Data Source Indicator */}
+        <div className="bg-white rounded-xl shadow-lg p-4 mb-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-3 h-3 rounded-full ${
+                topGainers.length > 0 && topGainers[0].source?.includes('realtime') ? 'bg-red-500' : 'bg-gray-500'
+              }`}></div>
+              <div>
+                <h4 className="font-semibold text-gray-800">
+                  {topGainers.length > 0 && topGainers[0].source?.includes('realtime')
+                    ? '🔴 Live Real-Time Market Data' 
+                    : '❌ Real-Time Data Unavailable'}
+                </h4>
+                <p className="text-sm text-gray-600">
+                  {topGainers.length > 0 && topGainers[0].source?.includes('realtime')
+                    ? 'Current market gainers from live financial data feeds'
+                    : 'Unable to connect to real-time market data sources'}
+                </p>
+              </div>
+            </div>
+            <div className="text-xs text-gray-500">
+              Last updated: {topGainers[0]?.lastUpdate ? new Date(topGainers[0].lastUpdate).toLocaleTimeString() : 'Never'}
+            </div>
+          </div>
+        </div>
+
+        {/* Market Gainers Section */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Activity size={24} className="text-green-500" />
+              Today's Top Gainers
+              {topGainers.length > 0 && !topGainers[0].source?.includes('realistic') && (
+                <span className="text-sm bg-green-100 text-green-700 px-2 py-1 rounded-full">Live API</span>
+              )}
+              {topGainers.length > 0 && topGainers[0].source?.includes('realistic') && (
+                <span className="text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded-full">Enhanced</span>
+              )}
+              {loadingGainers && <RefreshCw className="animate-spin text-blue-500" size={20} />}
+            </h3>
+            <button
+              onClick={() => {
+                // Clear cache and force refresh from real-time service
+                realTimeGainersService.clearCache();
+                fetchYahooGainers();
+              }}
+              disabled={loadingGainers}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 transition-colors"
+            >
+              <RefreshCw size={16} />
+              {loadingGainers ? 'Fetching Real-Time...' : 'Refresh Live Data'}
+            </button>
+          </div>
+
+          {loadingGainers ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              {[...Array(10)].map((_, i) => (
+                <div key={i} className="animate-pulse">
+                  <div className="bg-gray-200 rounded-lg p-4">
+                    <div className="h-4 bg-gray-300 rounded mb-2"></div>
+                    <div className="h-3 bg-gray-300 rounded mb-1"></div>
+                    <div className="h-3 bg-gray-300 rounded"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : topGainers.length === 0 ? (
+            <div className="p-12 text-center">
+              <AlertCircle className="mx-auto text-red-400 mb-4" size={48} />
+              <p className="text-gray-600 mb-2">No real-time market data available</p>
+              <p className="text-sm text-gray-500 mb-4">Unable to connect to live market data sources</p>
+              <button
+                onClick={fetchYahooGainers}
+                disabled={loadingGainers}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              {topGainers.map((stock, index) => {
+                const stockSentiment = stockSentiments.get(stock.symbol);
+                return (
+                  <div
+                    key={stock.symbol}
+                    onClick={() => handleStockSelection(stock.symbol)}
+                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-lg transform hover:-translate-y-1 ${
+                      selectedStock === stock.symbol 
+                        ? 'border-blue-500 bg-blue-50' 
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-lg font-bold text-gray-900">{stock.symbol}</span>
+                      <span className="text-green-600 font-semibold flex items-center gap-1">
+                        <ArrowUp size={14} />
+                        {stock.change}
+                      </span>
+                    </div>
+                    
+                    <div className="text-sm text-gray-600 mb-2 truncate">
+                      {stock.name}
+                    </div>
+                    
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium text-gray-900">{stock.price}</span>
+                      {stock.volume && (
+                        <span className="text-gray-500 text-xs">Vol: {stock.volume}</span>
+                      )}
+                    </div>
+
+                    {/* Sentiment indicator */}
+                    {stockSentiment && (
+                      <div className="mt-3 pt-2 border-t border-gray-100">
+                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getSentimentColor(stockSentiment.score)}`}>
+                          {getSentimentIcon(stockSentiment.score)}
+                          {stockSentiment.label}
+                          <span className="text-xs opacity-75">
+                            ({Math.round(stockSentiment.confidence)}%)
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Search and Controls */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Stock Search */}
             <div className="lg:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Stock Symbol
+                Manual Stock Search
               </label>
               <div className="flex gap-2">
                 <input
                   type="text"
-                  value={selectedStock}
-                  onChange={(e) => setSelectedStock(e.target.value.toUpperCase())}
                   placeholder="Enter stock symbol (e.g., AAPL)"
                   className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  onKeyPress={(e) => e.key === 'Enter' && handleStockSearch(selectedStock)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleStockSearch(e.target.value);
+                      e.target.value = '';
+                    }
+                  }}
                 />
                 <button
-                  onClick={() => handleStockSearch(selectedStock)}
+                  onClick={(e) => {
+                    const input = e.target.parentElement.querySelector('input');
+                    handleStockSearch(input.value);
+                    input.value = '';
+                  }}
                   disabled={loading}
                   className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 transition-colors"
                 >
@@ -179,24 +464,9 @@ const StockNewsApp = () => {
                 </button>
               </div>
               
-              {/* Popular Stocks */}
               <div className="mt-3">
-                <p className="text-sm text-gray-600 mb-2">Popular stocks:</p>
-                <div className="flex flex-wrap gap-2">
-                  {popularStocks.slice(0, 8).map(stock => (
-                    <button
-                      key={stock}
-                      onClick={() => setSelectedStock(stock)}
-                      className={`px-3 py-1 text-sm rounded-full transition-colors ${
-                        selectedStock === stock 
-                          ? 'bg-blue-100 text-blue-700 border border-blue-300' 
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {stock}
-                    </button>
-                  ))}
-                </div>
+                <p className="text-sm text-gray-600 mb-2">Click on any gainer above or search manually</p>
+                <p className="text-xs text-gray-500">News will be fetched only when you select a stock</p>
               </div>
             </div>
 
@@ -237,6 +507,19 @@ const StockNewsApp = () => {
           </div>
         </div>
 
+        {/* Current Selection Info */}
+        {selectedStock && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 mb-8 border border-blue-200">
+            <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
+              <FileText size={18} />
+              Analyzing: {selectedStock}
+            </h4>
+            <p className="text-blue-700 text-sm">
+              {loading ? 'Fetching latest news and sentiment analysis...' : `Showing ${newsData.length} articles with sentiment analysis`}
+            </p>
+          </div>
+        )}
+
         {/* API Sources Status */}
         {apiSources.length > 0 && (
           <div className="bg-white rounded-xl shadow-lg p-4 mb-8">
@@ -259,7 +542,7 @@ const StockNewsApp = () => {
         )}
 
         {/* Sentiment Overview */}
-        {sentiment && (
+        {sentiment && selectedStock && (
           <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
             <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
               <BarChart3 size={24} />
@@ -330,14 +613,14 @@ const StockNewsApp = () => {
 
         {/* Error Display */}
         {error && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-8">
-            <div className="flex items-center gap-2 text-yellow-800">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-8">
+            <div className="flex items-center gap-2 text-red-800">
               <AlertCircle size={20} />
-              <span className="font-medium">Info:</span>
+              <span className="font-medium">Real-Time Data Issue:</span>
               <span>{error}</span>
             </div>
-            <p className="text-sm text-yellow-700 mt-2">
-              💡 Configure API keys in .env file for real-time data. Currently showing demo data.
+            <p className="text-sm text-red-700 mt-2">
+              💡 Real-time market data requires active API connections. Try refreshing or check your internet connection.
             </p>
           </div>
         )}
@@ -348,36 +631,34 @@ const StockNewsApp = () => {
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                 <FileText size={24} />
-                News Analysis - {selectedStock}
+                {selectedStock ? `News Analysis - ${selectedStock}` : 'Select a Stock for News Analysis'}
                 {loading && <RefreshCw className="animate-spin text-blue-500" size={20} />}
               </h3>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => fetchStockNews(selectedStock, parseInt(timeRange.replace('d', '')))}
-                  disabled={loading}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 transition-colors"
-                >
-                  <RefreshCw size={16} />
-                  Refresh
-                </button>
-                <button
-                  onClick={handleExport}
-                  disabled={loading || newsData.length === 0}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 transition-colors"
-                >
-                  <Download size={16} />
-                  Export CSV
-                </button>
-              </div>
+              {selectedStock && (
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleStockSelection(selectedStock)}
+                    disabled={loading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2 transition-colors"
+                  >
+                    <RefreshCw size={16} />
+                    Refresh
+                  </button>
+                  <button
+                    onClick={handleExport}
+                    disabled={loading || newsData.length === 0}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 transition-colors"
+                  >
+                    <Download size={16} />
+                    Export CSV
+                  </button>
+                </div>
+              )}
             </div>
             
             {/* Summary Stats */}
             {newsData.length > 0 && (
               <div className="mt-4 flex items-center gap-6 text-sm text-gray-600">
-                <span className="flex items-center gap-1">
-                  <FileText size={14} />
-                  {newsData.length} articles
-                </span>
                 <span className="flex items-center gap-1">
                   <Calendar size={14} />
                   Last {timeRange}
@@ -396,19 +677,13 @@ const StockNewsApp = () => {
               <p className="text-gray-600">Fetching latest news for {selectedStock}...</p>
               <p className="text-sm text-gray-500 mt-2">This may take a few seconds</p>
             </div>
-          ) : newsData.length === 0 ? (
+          ) : newsData.length === 0 && selectedStock ? (
             <div className="p-12 text-center">
               <FileText className="mx-auto text-gray-400 mb-4" size={48} />
               <p className="text-gray-600 mb-2">No news articles found for {selectedStock}</p>
               <p className="text-sm text-gray-500">Try a different stock symbol or check your API configuration</p>
-              <button
-                onClick={() => handleStockSearch('AAPL')}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Try AAPL
-              </button>
             </div>
-          ) : (
+          ) : selectedStock ? (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -479,55 +754,50 @@ const StockNewsApp = () => {
                 </tbody>
               </table>
             </div>
+          ) : (
+            <div className="p-12 text-center">
+              <Search className="mx-auto text-gray-400 mb-4" size={48} />
+              <p className="text-gray-600 mb-2">Select a stock to view news analysis</p>
+              <p className="text-sm text-gray-500">Click on any gainer above or search manually</p>
+            </div>
           )}
         </div>
 
         {/* Setup Instructions */}
-        {newsData.length > 0 && apiSources.filter(s => s.status === 'success').length === 0 && (
+        {topGainers.length === 0 && !loadingGainers && (
           <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-6">
             <h4 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
               <Zap size={20} />
-              Get Real-Time Data
+              Real-Time Data Sources
             </h4>
             <p className="text-blue-700 mb-4">
-              You're currently viewing demo data. Get real-time financial news by configuring free API keys:
+              This app fetches live market gainers from multiple real-time sources:
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-white rounded-lg p-4">
-                <h5 className="font-medium text-gray-900 mb-2">🏆 Marketaux (Recommended)</h5>
-                <p className="text-sm text-gray-600 mb-2">100 requests/day, sentiment analysis</p>
-                <a 
-                  href="https://www.marketaux.com" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                >
-                  Get Free API Key →
-                </a>
+                <h5 className="font-medium text-gray-900 mb-2">🔴 Yahoo Finance</h5>
+                <p className="text-sm text-gray-600 mb-2">Live screener data from Yahoo Finance</p>
+                <p className="text-xs text-gray-500">Real-time market gainers</p>
               </div>
               <div className="bg-white rounded-lg p-4">
-                <h5 className="font-medium text-gray-900 mb-2">⚡ Finnhub</h5>
-                <p className="text-sm text-gray-600 mb-2">60 requests/minute, real-time data</p>
-                <a 
-                  href="https://finnhub.io/register" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                >
-                  Get Free API Key →
-                </a>
+                <h5 className="font-medium text-gray-900 mb-2">📊 CNBC Markets</h5>
+                <p className="text-sm text-gray-600 mb-2">Professional market data feeds</p>
+                <p className="text-xs text-gray-500">Live financial data</p>
               </div>
             </div>
+            <p className="text-sm text-blue-600 mt-4">
+              ⚠️ Real-time data depends on external API availability and may require network connectivity.
+            </p>
           </div>
         )}
 
         {/* Footer */}
         <div className="mt-8 text-center text-gray-600">
           <p className="text-sm mb-2">
-            Built with React • Multiple news APIs • Real-time sentiment analysis
+            Built with React • Multiple news APIs • Real-time sentiment analysis • Live market data feeds
           </p>
           <p className="text-xs text-gray-500">
-            Configure API keys in .env file for live data • Open source on GitHub
+            Real-time gainers from live market sources • Click stocks to fetch news • No static data used
           </p>
         </div>
       </div>
